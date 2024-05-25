@@ -1,0 +1,43 @@
+todo app :
+
+setup express server
+mongo db connection
+
+set the EJS to express view engine
+
+register page 
+register api
+
+login page 
+login api
+
+session base authentication
+middle ware to protect API
+
+dashboard page
+logout page
+logout from all the device
+
+
+Backend API's
+create API
+read API
+edit API
+delete API
+
+
+Dashboard Client API
+Axios
+Axios create API
+Axios read API
+Axios edit API
+Axios delete API
+
+
+Pagination API's
+Rate limiting
+
+
+Deploy
+
+JWT email authentication
