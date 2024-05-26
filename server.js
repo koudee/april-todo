@@ -3,15 +3,14 @@ require("dotenv").config();
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const session = require("express-session");
-const mongodbSession = require("connect-mongodb-session")(session); 
+const mongodbSession = require("connect-mongodb-session")(session);
 
 //file-import
 const { userDataValidation, isEmailRgex } = require("./utils/authUtils");
 const userModel = require("./models/userModel");
 const { isAuth } = require("./middleware/isAuth");
 const { todoDataValidation } = require("./utils/todoUtils");
-const todoModel = require("./Models/todoModel");
-const rateLimiting = require("./middleware/rateLimiting");
+const todoModel = require("./models/todoModel");
 
 //constants
 const app = express();
@@ -46,7 +45,7 @@ app.use(
   })
 );
 
-app.use(express.static("Public"));
+app.use(express.static("public"));
 
 app.get("/", (req, res) => {
   return res.render("server");
@@ -209,229 +208,200 @@ app.post("/logout_from_all_devices", isAuth, async (req, res) => {
   }
 });
 
-//todoapi
+//todo api's
 
-//create-api
-app.post("/create-item", isAuth, rateLimiting, async (req,res)=>{
-
-
+//create
+app.post("/create-item", isAuth, async (req, res) => {
+  console.log(req.body);
 
   const todoText = req.body.todo;
   const username = req.session.user.username;
-
   try {
     await todoDataValidation({ todoText });
-
-    return res.send("all ok")
   } catch (error) {
-    
     return res.send({
-      status:400,
+      status: 400,
       message: error,
-      
     });
   }
+
   const todoObj = new todoModel({
     todo: todoText,
-    username:username,
+    username: username,
   });
+
   try {
-    const todoDb = await todoObj.save()
+    const todoDb = await todoObj.save();
+
     // const todoDb = await todoModel.create({
     //   todo: todoText,
     //   username: username,
     // });
 
     return res.send({
-      status:201,
-      message: "todo created successfully",
+      status: 201,
+      message: "Todo created successfully",
       data: todoDb,
-    })
+    });
   } catch (error) {
     return res.send({
       status: 500,
-      message: "Internal Server Error",
+      message: "Internal server error",
       error: error,
     });
   }
 });
 
-//read-api
-//read-item?skip=10
+//read
+app.get("/read-item", isAuth, async (req, res) => {
+  const username = req.session.user.username;
 
+  try {
+    const todoDb = await todoModel.find({ username });
 
-app.get("/read-item", isAuth, async (req, res)=>{
-  const username = req.session.user.username
-  const SKIP = req.query.skip || 0;
-  const LIMIT = 10;
+    console.log(todoDb);
 
+    if (todoDb.length === 0) {
+      return res.send({
+        status: 204,
+        message: "No todos found",
+      });
+    }
 
-
-try {
-  // const todoDb = await todoModel.find({username})
-  //pagination, match
-  const todoDb = await todoModel.aggregate([
-    {
-      $match: {username:username}
-    },
-    {
-      $skip: SKIP
-    },
-    {
-      $limit: LIMIT
-    },
-    // {
-    //   $facet:{ data1: [{$skip: SKIP},{$limit: LIMIT}], 
-    // //   data2: [{$sort: SORT},{$match: MATCH}]
-    //  }
-    // }
-    //todoDb[0].data 
-  ])
-
-  console.log(todoDb[0].data);
-
-  if(todoDb.length === 0){
     return res.send({
-      status: 204,
-      message: "No todo available",
+      status: 200,
+      message: "Read success",
+      data: todoDb,
+    });
+  } catch (error) {
+    return res.send({
+      status: 500,
+      message: "Internal server error",
+      error: error,
     });
   }
-
-  return res.send({
-    status:200,
-    message: "read successfull",
-    data: todoDb[0].data,
-  });
-} catch (error) {
-  return res.send({
-    status:500,
-    message: "internal server error",
-    error: error,
-  })
-}
-})
+});
 
 //edit
 app.post("/edit-item", isAuth, async (req, res) => {
+  const { todoId, newData } = req.body;
+  const username = req.session.user.username;
 
-  const {todoId, newData} = req.body;
-  const username =req.session.user.username
-
-  if(!todoId){
+  if (!todoId) {
     return res.send({
-      status:400,
-      message:"Todo ID not found",
-    })
+      status: 400,
+      message: "Missing todoId",
+    });
   }
 
   try {
-    await todoDataValidation({todoText: newData})
+    await todoDataValidation({ todoText: newData });
   } catch (error) {
     return res.send({
       status: 400,
-      error:error,
-    })
+      message: error,
+    });
   }
 
   //find the todo
-
   try {
-    const todoDb = await todoModel.findOne({_id: todoId});
+    const todoDb = await todoModel.findOne({ _id: todoId });
 
-    if(!todoDb){
+    if (!todoDb) {
       return res.send({
-        status:203,
-        message:`No todo Found with todoID: ${todoId}`, 
+        status: 203,
+        message: `No todo found with todoId : ${todoId}`,
       });
     }
-      //compare the todo
-    if(username!== todoDb.username){
+
+    //compare the ownership
+    if (username !== todoDb.username) {
       return res.send({
-        status:403,
-        message:"Not allowed to edit the Todo",
-      })
+        status: 403,
+        message: "Not allowed to edit the todo",
+      });
     }
 
-    const prevTodo = await todoModel.findOneAndUpdate({_id: blogId},{todo: newData})
+    const prevTodo = await todoModel.findOneAndUpdate(
+      { _id: todoId },
+      { todo: newData }
+    );
 
-    //  const todoDbupdate = await todoModel.updateOne({_id: blogId},{todo: newData}) 
+    // const todoDbupdate = await todoModel.updateOne(
+    //   { _id: todoId },
+    //   { todo: newData }
+    // );
 
     return res.send({
-      status:200,
-      message: "Todo Updated Successfully",
+      status: 200,
+      message: "Todo updated successfully",
       data: prevTodo,
     });
   } catch (error) {
-    console.log(error); 
+    console.log(error);
     return res.send({
       status: 500,
-      message: "internal server error",
+      message: "Internal server error",
       error: error,
     });
-  }  
-
+  }
 
   //edit the todo
-
-  
-
-})
+});
 
 app.post("/delete-item", isAuth, async (req, res) => {
+  const { todoId } = req.body;
+  const username = req.session.user.username;
 
-  const {todoId} = req.body;
-  const username =req.session.user.username
-
-  if(!todoId){
+  if (!todoId) {
     return res.send({
-      status:400,
-      message:"Todo ID not found",
-    })
+      status: 400,
+      message: "Missing todoId",
+    });
   }
 
   //find the todo
-
   try {
-    const todoDb = await todoModel.findOne({_id: todoId});
+    const todoDb = await todoModel.findOne({ _id: todoId });
 
-    if(!todoDb){
+    if (!todoDb) {
       return res.send({
-        status:203,
-        message:`No todo Found with todoID: ${todoId}`, 
+        status: 203,
+        message: `No todo found with todoId : ${todoId}`,
       });
     }
-      //compare the todo
-    if(username!== todoDb.username){
+
+    //compare the ownership
+    if (username !== todoDb.username) {
       return res.send({
-        status:403,
-        message:"Not allowed to delete the Todo",
-      })
+        status: 403,
+        message: "Not allowed to delete the todo",
+      });
     }
- //delete the todo
 
-    const deletedTodo = await todoModel.findOneAndDelete({_id: blogId})
+    const deletedTodo = await todoModel.findOneAndDelete({ _id: todoId });
 
-      // const todoDbdelete = await todoModel.deleteOne({_id: blogId},{todo: newData}) 
+    // const todoDbupdate = await todoModel.updateOne(
+    //   { _id: todoId },
+    //   { todo: newData }
+    // );
 
     return res.send({
-      status:200,
-      message: "Todo deleted Successfully",
+      status: 200,
+      message: "Todo deleted successfully",
       data: deletedTodo,
     });
   } catch (error) {
-    console.log(error); 
+    console.log(error);
     return res.send({
       status: 500,
-      message: "internal server error",
+      message: "Internal server error",
       error: error,
     });
-  }  
+  }
 
-
- 
-  
-
-})
+  //edit the todo
+});
 
 app.listen(PORT, () => {
   console.log("Server is running:");
